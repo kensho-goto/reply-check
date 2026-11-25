@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>返信の見比べ</title>
+<style>
+  :root { --bg:#f4f1ec; --ink:#2b2a28; --sub:#77736c; --line:#e2ddd5; --her:#ffffff; --you:#8de055; --accent:#2f7d5b; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.6; -webkit-text-size-adjust:100%; }
+  main { max-width:520px; margin:0 auto; padding:20px 16px 120px; }
+  h1 { font-size:22px; margin:8px 0 12px; font-weight:700; }
+  p { margin:0 0 10px; }
+  .sub { color:var(--sub); font-size:13px; }
+  .bar { height:4px; background:var(--line); border-radius:2px; margin:4px 0 18px; overflow:hidden; }
+  .bar i { display:block; height:100%; background:var(--accent); transition:width .3s; }
+  .chat { background:#c9d6e3; padding:14px 10px; border-radius:14px; }
+  .row { display:flex; margin:6px 0; }
+  .row.you { justify-content:flex-end; }
+  .b { max-width:80%; padding:8px 12px; border-radius:16px; font-size:15px; white-space:pre-wrap; word-break:break-word; }
+  .row.him .b { background:var(--her); border-top-left-radius:4px; }
+  .row.you .b { background:var(--you); border-top-right-radius:4px; }
+  .who { font-size:11px; color:#4f5d6b; margin:8px 0 0 2px; }
+  .note { text-align:center; font-size:12px; color:#4f5d6b; margin:10px 0; }
+  .q { font-weight:700; margin:22px 0 4px; font-size:16px; }
+  .opt { display:block; width:100%; text-align:left; background:#fff; border:2px solid transparent; border-radius:16px; padding:10px 12px; margin:10px 0; font:inherit; color:inherit; cursor:pointer; }
+  .opt.on { border-color:var(--accent); background:#eef7f1; }
+  .opt .b { display:block; max-width:none; padding:0; background:none; }
+  .opt .b + .b { margin-top:6px; padding-top:6px; border-top:1px dashed var(--line); }
+  .mark { font-size:12px; color:var(--accent); font-weight:700; margin-bottom:2px; display:none; }
+  .opt.on .mark { display:block; }
+  .opt.no { border-color:#c95b4a; background:#fbefed; }
+  .opt.no .mark { display:block; color:#c95b4a; }
+  .card { background:#fff; border:2px solid transparent; border-radius:16px; padding:12px; margin:12px 0; }
+  .card.on { border-color:var(--accent); }
+  .card.no { border-color:#c95b4a; }
+  .msgs .b { display:block; max-width:none; padding:0; background:none; font-size:15px; }
+  .msgs .b + .b { margin-top:6px; padding-top:6px; border-top:1px dashed var(--line); }
+  .acts { display:flex; gap:8px; margin-top:10px; }
+  .acts button { flex:1; font:inherit; font-size:14px; padding:9px 4px; border-radius:999px; border:2px solid var(--line); background:#fff; color:var(--sub); cursor:pointer; }
+  .acts .good.on { border-color:var(--accent); background:var(--accent); color:#fff; font-weight:700; }
+  .acts .bad.on { border-color:#c95b4a; background:#c95b4a; color:#fff; font-weight:700; }
+  .choices button { font:inherit; background:#fff; border:2px solid var(--line); border-radius:999px; padding:8px 16px; margin:6px 6px 0 0; cursor:pointer; color:inherit; }
+  .choices button.on { border-color:var(--accent); background:#eef7f1; }
+  .next { position:fixed; left:0; right:0; bottom:0; padding:12px 16px calc(12px + env(safe-area-inset-bottom)); background:linear-gradient(transparent, var(--bg) 30%); }
+  .next button { display:block; width:100%; max-width:520px; margin:0 auto; font:inherit; font-weight:700; font-size:17px; padding:14px; border:0; border-radius:14px; background:var(--accent); color:#fff; cursor:pointer; }
+  .next button:disabled { background:#b9c4bd; }
+  textarea { width:100%; min-height:110px; font:inherit; padding:10px; border-radius:12px; border:1px solid var(--line); }
+  .code { background:#fff; border-radius:12px; padding:12px; font-family:ui-monospace,Menlo,monospace; font-size:12px; white-space:pre-wrap; word-break:break-all; color:var(--sub); }
+  .big { display:block; width:100%; font:inherit; font-weight:700; font-size:17px; padding:14px; border:0; border-radius:14px; background:#06c755; color:#fff; text-align:center; text-decoration:none; margin:14px 0 8px; cursor:pointer; }
+  .plainbtn { display:block; width:100%; font:inherit; padding:12px; border-radius:14px; border:2px solid var(--line); background:#fff; color:inherit; cursor:pointer; }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<div class="next"><button id="next" disabled>はじめる</button></div>
+<script>
+(async () => {
+  const SC = await (await fetch("scenes.json")).json();
+  const SAVE = "reply-check-v1";
+  const REPEAT = ["D2", "L7"]; // 答えのぶれを見るため、最後に2回目を出す
+  const app = document.getElementById("app"), btn = document.getElementById("next");
+  const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  let st;
+  try { st = JSON.parse(localStorage.getItem(SAVE)); } catch { st = null; }
+  if (!st || !st.plan) {
+    // 場面の順番と、選択肢の順番を、この人だけのものにする
+    let order;
+    do { order = shuffle(SC.map((s) => s.id)); } while (REPEAT.includes(order[order.length - 1]));
+    order = order.concat(REPEAT);
+    st = { step: -1, age: "", app: "", plan: order.map((id) => ({ id, opts: shuffle(["A", "B", "C"]) })), ans: [], memo: "" };
+  }
+  const save = () => { try { localStorage.setItem(SAVE, JSON.stringify(st)); } catch {} };
+  const total = st.plan.length;
+
+  function intro() {
+    app.innerHTML = `
+      <h1>LINEの返信、どれなら返したくなる？</h1>
+      <p>マッチングアプリで知り合った男性から届く返信を見比べて、「これなら返したくなる」を選んでもらうアンケートです。</p>
+      <p class="sub">・全部で${total}の場面です（10〜15分）<br>・正解はありません。直感で選んでください<br>・お名前やメールアドレスは聞きません<br>・途中でやめても、同じスマホで開けば続きからできます</p>
+      <div class="q">あなたの年代</div>
+      <div class="choices" data-k="age">${["20代前半", "20代後半", "30代前半", "30代後半", "40代以上"].map((v) => `<button class="${st.age === v ? "on" : ""}">${v}</button>`).join("")}</div>
+      <div class="q">マッチングアプリを使ったことは？</div>
+      <div class="choices" data-k="app">${["今使っている", "前に使っていた", "使ったことはない"].map((v) => `<button class="${st.app === v ? "on" : ""}">${v}</button>`).join("")}</div>`;
+    app.querySelectorAll(".choices").forEach((g) => g.querySelectorAll("button").forEach((b) => b.onclick = () => { st[g.dataset.k] = b.textContent; save(); intro(); }));
+    btn.textContent = "はじめる"; btn.disabled = !(st.age && st.app);
+  }
+
+  function scene() {
+    const p = st.plan[st.step], s = SC.find((x) => x.id === p.id);
+    const a = st.ans[st.step] || (st.ans[st.step] = { best: "", no: [] });
+    const opt = (k) => s.opts.find((o) => o.k === k);
+    const lines = (t) => (Array.isArray(t) ? t : [t]).map((x) => `<span class="b">${esc(x)}</span>`).join("");
+    app.innerHTML = `
+      <div class="sub">場面 ${st.step + 1} / ${total}</div>
+      <div class="bar"><i style="width:${(st.step / total) * 100}%"></i></div>
+      <div class="chat">
+        ${s.ctx.map((l) => `<div class="row ${l.f === "w" ? "you" : "him"}"><span class="b">${esc(l.t)}</span></div>`).join("") || ""}
+        ${s.note ? `<div class="note">${esc(s.note)}</div>` : ""}
+      </div>
+      <p class="sub" style="margin-top:6px">緑＝あなた、白＝彼</p>
+      <div class="q">彼から次にこれが届いたら、一番返したくなるのは？</div>
+      <p class="sub">1つ選んでください。「返したくない・既読スルーしそう」と思うものがあれば、それにも印を（いくつでも）。</p>
+      ${p.opts.map((k) => `
+        <div class="card ${a.best === k ? "on" : ""} ${a.no.includes(k) ? "no" : ""}">
+          <div class="msgs">${lines(opt(k).t)}</div>
+          <div class="acts">
+            <button class="good ${a.best === k ? "on" : ""}" data-k="${k}">${a.best === k ? "✓ " : ""}これに返したい</button>
+            <button class="bad ${a.no.includes(k) ? "on" : ""}" data-k="${k}">${a.no.includes(k) ? "✓ " : ""}返したくない</button>
+          </div>
+        </div>`).join("")}`;
+    app.querySelectorAll(".good").forEach((b) => b.onclick = () => { a.best = b.dataset.k; a.no = a.no.filter((x) => x !== b.dataset.k); save(); scene(); });
+    app.querySelectorAll(".bad").forEach((b) => b.onclick = () => { const k = b.dataset.k; a.no = a.no.includes(k) ? a.no.filter((x) => x !== k) : a.no.concat(k); if (a.best === k) a.best = ""; save(); scene(); });
+    btn.textContent = st.step + 1 === total ? "次へ（最後のひとこと）" : "次へ"; btn.disabled = !a.best;
+  }
+
+  function memo() {
+    app.innerHTML = `
+      <h1>ありがとうございます！</h1>
+      <p>ほかに、気づいたことがあれば書いてください（なくても大丈夫です）。</p>
+      <p class="sub">例：こういう返信は嫌、絵文字が多いと…、短すぎると…</p>
+      <textarea id="m">${esc(st.memo)}</textarea>`;
+    document.getElementById("m").oninput = (e) => { st.memo = e.target.value; save(); };
+    btn.textContent = "答えをまとめる"; btn.disabled = false;
+  }
+
+  function code() {
+    return ["返信の見比べ v1", `年代:${st.age} / アプリ:${st.app}`,
+      st.plan.map((p, i) => `${p.id}=${st.ans[i].best}${st.ans[i].no.length ? "-" + st.ans[i].no.join("") : ""}`).join(" "),
+      st.memo ? "ひとこと:" + st.memo.replace(/\s+/g, " ") : ""].filter(Boolean).join("\n");
+  }
+
+  function done() {
+    const c = code();
+    app.innerHTML = `
+      <h1>最後に、答えを送ってください</h1>
+      <p>下のボタンで LINE が開きます。このアンケートを送ってくれた人を選んで、送ってください。</p>
+      <a class="big" href="https://line.me/R/share?text=${encodeURIComponent(c)}">LINE で答えを送る</a>
+      <button class="plainbtn" id="cp">うまく開かないときは：答えをコピーする</button>
+      <p class="sub" style="margin-top:14px">送る中身（あなたが選んだ記号です）</p>
+      <div class="code">${esc(c)}</div>`;
+    document.getElementById("cp").onclick = async () => {
+      try { await navigator.clipboard.writeText(c); document.getElementById("cp").textContent = "コピーしました。LINE に貼りつけて送ってください"; }
+      catch { document.getElementById("cp").textContent = "コピーできませんでした。上の文字を長押ししてコピーしてください"; }
+    };
+    document.querySelector(".next").style.display = "none";
+  }
+
+  function render() {
+    document.querySelector(".next").style.display = "";
+    if (st.step < 0) intro(); else if (st.step < total) scene(); else if (st.step === total) memo(); else done();
+    window.scrollTo(0, 0);
+  }
+  btn.onclick = () => { st.step++; save(); render(); };
+  render();
+})();
+</script>
+</body>
+</html>
